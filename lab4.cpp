@@ -137,18 +137,7 @@ int main(int argc, char** argv) {
     }
 
     videoFile.release();
-    /*
-    splitMat(grayFrame,layers);
-    stitchedFrame = stitchMat(layers);
-    while (true) {
-        // Display the frame
-        cv::imshow("Frame", stitchedFrame);
 
-        // Press 'q' to break the loop
-        if (cv::waitKey(30) == 'q')
-            break;
-    }
-    */
     return 0;
 }
 
