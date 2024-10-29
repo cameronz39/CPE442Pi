@@ -1,14 +1,19 @@
-CXX = g++
-CXXFLAGS = -std=c++11 `pkg-config --cflags opencv4`
-LDFLAGS = `pkg-config --libs opencv4`
+# Compiler
+CC = g++
 
-TARGET = main
-SRC = main.cpp
+# Compiler flags
+CFLAGS = -Wall -O2 -lpthread
 
-all: $(TARGET)
+# OpenCV include
+OPENCV_FLAGS = `pkg-config --cflags --libs opencv4`
+
+
+SRC = lab4.c
+TARGET = lab4
+
+# Build the application
+
 
 $(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(OPENCV_FLAGS)
 
-clean:
-	rm -f $(TARGET)

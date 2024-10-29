@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
 
         // apply the Sobel Filter
         grayFrame = to442_grayscale(frame);
-        sobelFrame = applyOpenCVSobel(grayFrame);
+        sobelFrame = to442_sobel(grayFrame);
 
         // Display the frame
         cv::imshow("Frame", sobelFrame);
