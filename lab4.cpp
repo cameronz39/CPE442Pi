@@ -1,6 +1,7 @@
 // Lab4.c
 // Chris Bae and Cameron Zorio
 
+#include <arm_neon.h>
 #include <opencv2/opencv.hpp>
 #include <stdio.h>
 #include <pthread.h>
@@ -88,6 +89,8 @@ int main(int argc, char** argv) {
         std::cerr << "Error: Could not open video file " << argv[1] << std::endl;
         return -1;
     }
+
+    printf("Use 'export DISPLAY=:0' to connect to the Pi's display remotely\n");
 
     cv::Mat frame, stitchedFrame;
     cv::Mat resultsLayers[4];
