@@ -102,15 +102,16 @@ int main(int argc, char** argv) {
 	printf("Processing frame %d\n", count);
         // Capture frame-by-frame
         videoFile >> frame;
-        
-    
+
+        if(count == 1) {
+		printf("Video file row length %d\n", frame.rows);
+	}
         // split the current frame into four horizontal layers
         
         splitMat(frame, layers);
 
         // Create 4 threads, one for each layer
         pthread_t threads[4];
-        
 
         for (int i = 0; i < 4; i++) {
             // give each thread a layer
@@ -149,13 +150,7 @@ int main(int argc, char** argv) {
 
 
 cv::Mat to442_grayscale(cv::Mat& frame) {
-    /*
-    cv::Mat grayFrame;
-    cv::cvtColor(frame, grayFrame, cv::COLOR_BGR2GRAY);
-    return grayFrame;
-    */
 
-    
     cv::Mat grayFrame = cv::Mat(frame.rows,frame.cols,CV_8UC1);
     int rWeight = static_cast<int>(R * 255);  // scale by 255 for precision
     int gWeight = static_cast<int>(G * 255);
@@ -186,9 +181,10 @@ cv::Mat to442_grayscale(cv::Mat& frame) {
 
 cv::Mat to442_sobel(cv::Mat& grayFrame) {
     cv::Mat sobelFrame = cv::Mat(grayFrame.rows-2,grayFrame.cols-2,CV_8UC1);
-
-    int p11, p12, p13, p21, p23, p31, p32, p33;
     int sum;
+    int16x8_t weight_neg1 = vdupq_n_s16(-1);
+    int16x8_t weight_pos2 = vdupq_n_s16(2);
+    int16x8_t weight_neg2 = vdupq_n_s16(-2);
 
     // loop through the grayscale rows, skipping the borders
     for (int i = 1; i < grayFrame.rows-1; i++) 
@@ -200,42 +196,72 @@ cv::Mat to442_sobel(cv::Mat& grayFrame) {
 
             u_char* sobelFrame_i = sobelFrame.ptr<u_char>(i-1);
 
-            for(int j = 1; j < grayFrame.cols-1; j++)
+            for(int j = 1; j < grayFrame.cols-1; j += 8)
             {
-                // load a local region of pixels and cast to 16 bits
-                // LAB 5: explicit, go from double reg to quad reg
-                p11 = (int)(grayFrame_im1[j - 1]);
-                p12 = (int)(grayFrame_im1[j    ]);
-                p13 = (int)(grayFrame_im1[j + 1]); 
+	    // Load 8 pixels from each relevant row
+            uint8x8_t p11 = vld1_u8(&grayFrame_im1[j - 1]);
+            uint8x8_t p12 = vld1_u8(&grayFrame_im1[j]);
+            uint8x8_t p13 = vld1_u8(&grayFrame_im1[j + 1]);
 
-                p21 = (int)(grayFrame_i[j - 1]);
-                p23 = (int)(grayFrame_i[j + 1]); 
+            uint8x8_t p21 = vld1_u8(&grayFrame_i[j - 1]);
+            uint8x8_t p23 = vld1_u8(&grayFrame_i[j + 1]);
 
-                p31 = (int)(grayFrame_ip1[j - 1]);
-                p32 = (int)(grayFrame_ip1[j    ]);
-                p33 = (int)(grayFrame_ip1[j + 1]); 
+            uint8x8_t p31 = vld1_u8(&grayFrame_ip1[j - 1]);
+            uint8x8_t p32 = vld1_u8(&grayFrame_ip1[j]);
+            uint8x8_t p33 = vld1_u8(&grayFrame_ip1[j + 1]);
 
-                // apply weights and sum for Gx
-                // LAB 5: Load weights into vector reg, vmul, vadd
-                Gx = -p11 + p13 - 2*p21 + 2*p23 - p31 + p33;
-                Gy = -p11 -2*p12 - p13 + p31 + 2*p32 + p33;
-                
-            
-                // takes abs and add Gx and Gy;
-                sum = abs(Gx) + abs(Gy);
+            // Widen to 16-bit integers for Gx and Gy computation and treat as signed
+            int16x8_t p11_16 = vreinterpretq_s16_u16(vmovl_u8(p11));
+            int16x8_t p12_16 = vreinterpretq_s16_u16(vmovl_u8(p12));
+            int16x8_t p13_16 = vreinterpretq_s16_u16(vmovl_u8(p13));
+            int16x8_t p21_16 = vreinterpretq_s16_u16(vmovl_u8(p21));
+            int16x8_t p23_16 = vreinterpretq_s16_u16(vmovl_u8(p23));
+            int16x8_t p31_16 = vreinterpretq_s16_u16(vmovl_u8(p31));
+            int16x8_t p32_16 = vreinterpretq_s16_u16(vmovl_u8(p32));
+            int16x8_t p33_16 = vreinterpretq_s16_u16(vmovl_u8(p33));
 
-                // clamp if necessary
-                if (sum > 255) {
-                    sum = 255;
-                }
+            // Calculate Gx: -p11 + p13 - 2*p21 + 2*p23 - p31 + p33
+            // Apply weights for Gx using element-wise multiplication
+            int16x8_t Gx_p11 = vmulq_s16(p11_16, weight_neg1);
+            int16x8_t Gx_p21 = vmulq_s16(p21_16, weight_neg2);
+            int16x8_t Gx_p23 = vmulq_s16(p23_16, weight_pos2);
+            int16x8_t Gx_p31 = vmulq_s16(p31_16, weight_neg1);
 
-                // cast back to 8 bits;
-                sum = (u_char)sum;
 
-                // store
-                // LAB 5: use vstore
-                sobelFrame_i[j-1] = sum;  
-            }     
+            // Sum the weighted values for Gx
+	    int16x8_t Gx = vaddq_s16(Gx_p11, p13_16);
+            Gx = vaddq_s16(Gx, Gx_p21);
+            Gx = vaddq_s16(Gx, Gx_p23);
+            Gx = vaddq_s16(Gx, Gx_p31);
+            Gx = vaddq_s16(Gx, p33_16);
+
+            // Calculate Gy: p11 + 2*p12 + p13 - p31 - 2*p32 - p33
+            // Apply weights for Gy using element-wise multiplication
+	    int16x8_t Gy_p12 = vmulq_s16(p12_16, weight_pos2);
+	    int16x8_t Gy_p31 = vmulq_s16(p31_16, weight_neg1);
+	    int16x8_t Gy_p32 = vmulq_s16(p32_16, weight_neg2);
+	    int16x8_t Gy_p33 = vmulq_s16(p33_16, weight_neg1);
+
+	    // Sum the weighted values for Gy
+	    int16x8_t Gy = vaddq_s16(p11_16, Gy_p12);
+	    Gy = vaddq_s16(Gy, p13_16);
+	    Gy = vaddq_s16(Gy, Gy_p31);
+ 	    Gy = vaddq_s16(Gy, Gy_p32);
+	    Gy = vaddq_s16(Gy, Gy_p33);
+
+            // Compute the absolute value of Gx and Gy
+            int16x8_t abs_Gx = vabsq_s16(Gx);
+            int16x8_t abs_Gy = vabsq_s16(Gy);
+
+            // Compute sum = abs(Gx) + abs(Gy)
+            int16x8_t sum = vaddq_s16(abs_Gx, abs_Gy);
+
+            // Clamp the values to 255
+            uint8x8_t result = vqmovn_u16(vminq_u16(vreinterpretq_u16_s16(sum), vdupq_n_u16(255)));
+
+            // Store the result back into the output frame
+            vst1_u8(&sobelFrame_i[j - 1], result);	
+            }
     }
     return sobelFrame;
 }
@@ -295,3 +321,4 @@ cv::Mat stitchMat(cv::Mat layers[4]) {
     }
     return frame;
 }
+	

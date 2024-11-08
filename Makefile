@@ -8,8 +8,8 @@ CFLAGS = -Wall -O2 -lpthread
 OPENCV_FLAGS = `pkg-config --cflags --libs opencv4`
 
 
-SRC = lab4.cpp
-TARGET = lab4
+SRC = lab5.c
+TARGET = lab5.out
 
 # Build the application
 
