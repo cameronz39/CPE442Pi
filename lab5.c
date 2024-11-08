@@ -1,4 +1,4 @@
-// Lab4.c
+// Lab5.c
 // Chris Bae and Cameron Zorio
 
 #include <arm_neon.h>
@@ -23,29 +23,6 @@ int count = 0;
 cv::Mat to442_grayscale(cv::Mat &frame);
 cv::Mat to442_sobel(cv::Mat &grayFrame);
 
-cv::Mat applyOpenCVSobel(const cv::Mat& grayFrame) {
-    cv::Mat gradX, gradY;
-    cv::Mat absGradX, absGradY;
-
-    // Apply Sobel operator in the X and Y directions
-    cv::Sobel(grayFrame, gradX, CV_16S, 1, 0, 3);  // X gradient
-    cv::Sobel(grayFrame, gradY, CV_16S, 0, 1, 3);  // Y gradient
-
-    // Take the absolute value and convert to 8-bit for display
-    cv::convertScaleAbs(gradX, absGradX);
-    cv::convertScaleAbs(gradY, absGradY);
-
-    // Calculate the gradient magnitude
-    cv::Mat sobelFrame;
-    cv::addWeighted(absGradX, 0.5, absGradY, 0.5, 0, sobelFrame);
-
-    // Crop to remove 1 row and column from each side
-    cv::Rect cropRegion(1, 1, sobelFrame.cols - 2, sobelFrame.rows - 2);
-    cv::Mat croppedSobelFrame = sobelFrame(cropRegion).clone();
-
-    return croppedSobelFrame;
-}
-
 void splitMat(cv::Mat &frame, cv::Mat layers[4]);
 cv::Mat stitchMat(cv::Mat layers[4]);
 
@@ -62,17 +39,17 @@ struct ThreadData {
 // pointer to any type
 void* applySobel(void* arg) {
     ThreadData* data = static_cast<ThreadData*>(arg);
-    
+
     // Convert the current layer to grayscale
     data->grayFrame = to442_grayscale(data->layer);
-    
+
     // Apply the Sobel filter to the grayscale frame
     data->sobelFrame = to442_sobel(data->grayFrame);
     //data->sobelFrame = applyOpenCVSobel(data->grayFrame);
     return nullptr;
 }
-    
-    
+
+
 // pointers for the return value of each thread
 void *thread1Status;
 void *thread2Status;
@@ -107,7 +84,6 @@ int main(int argc, char** argv) {
 		printf("Video file row length %d\n", frame.rows);
 	}
         // split the current frame into four horizontal layers
-        
         splitMat(frame, layers);
 
         // Create 4 threads, one for each layer
@@ -172,11 +148,10 @@ cv::Mat to442_grayscale(cv::Mat& frame) {
                 // gray = (float)red * R + (float)green * G + (float)blue * B;
                 // grayFrame_i[j] = (u_char)gray;
 		grayFrame_i[j] = static_cast<u_char>((red * rWeight + green * gWeight + blue * bWeight) / 255);
-        	
+
             }
         }
     return grayFrame;
-    
 }
 
 cv::Mat to442_sobel(cv::Mat& grayFrame) {
@@ -196,9 +171,10 @@ cv::Mat to442_sobel(cv::Mat& grayFrame) {
 
             u_char* sobelFrame_i = sobelFrame.ptr<u_char>(i-1);
 
+	   // Loop through the current row in mutiples of 8 now
             for(int j = 1; j < grayFrame.cols-1; j += 8)
             {
-	    // Load 8 pixels from each relevant row
+	    // Load local region of pixels in vector form
             uint8x8_t p11 = vld1_u8(&grayFrame_im1[j - 1]);
             uint8x8_t p12 = vld1_u8(&grayFrame_im1[j]);
             uint8x8_t p13 = vld1_u8(&grayFrame_im1[j + 1]);
@@ -228,7 +204,7 @@ cv::Mat to442_sobel(cv::Mat& grayFrame) {
             int16x8_t Gx_p31 = vmulq_s16(p31_16, weight_neg1);
 
 
-            // Sum the weighted values for Gx
+            // Sum for Gx
 	    int16x8_t Gx = vaddq_s16(Gx_p11, p13_16);
             Gx = vaddq_s16(Gx, Gx_p21);
             Gx = vaddq_s16(Gx, Gx_p23);
@@ -242,7 +218,7 @@ cv::Mat to442_sobel(cv::Mat& grayFrame) {
 	    int16x8_t Gy_p32 = vmulq_s16(p32_16, weight_neg2);
 	    int16x8_t Gy_p33 = vmulq_s16(p33_16, weight_neg1);
 
-	    // Sum the weighted values for Gy
+	    // Sum for Gy
 	    int16x8_t Gy = vaddq_s16(p11_16, Gy_p12);
 	    Gy = vaddq_s16(Gy, p13_16);
 	    Gy = vaddq_s16(Gy, Gy_p31);
@@ -256,11 +232,12 @@ cv::Mat to442_sobel(cv::Mat& grayFrame) {
             // Compute sum = abs(Gx) + abs(Gy)
             int16x8_t sum = vaddq_s16(abs_Gx, abs_Gy);
 
-            // Clamp the values to 255
+            // Clamp the values to 255:
+            // reinterpret as unsigned, use vmin to clamp to 255, and return to double register
             uint8x8_t result = vqmovn_u16(vminq_u16(vreinterpretq_u16_s16(sum), vdupq_n_u16(255)));
 
             // Store the result back into the output frame
-            vst1_u8(&sobelFrame_i[j - 1], result);	
+            vst1_u8(&sobelFrame_i[j - 1], result)
             }
     }
     return sobelFrame;
