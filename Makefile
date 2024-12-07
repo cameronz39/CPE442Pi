@@ -2,14 +2,13 @@
 CC = g++
 
 # Compiler flags
-CFLAGS = -Wall -O2 -lpthread
-
+CFLAGS = -Wall -O3 -lpthread -ffast-math -ftree-vectorize -mcpu=cortex-a53
 # OpenCV include
 OPENCV_FLAGS = `pkg-config --cflags --libs opencv4`
 
 
-SRC = lab5.c
-TARGET = lab5.out
+SRC = lab6.c
+TARGET = lab6.out
 
 # Build the application
 
