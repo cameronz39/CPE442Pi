@@ -74,9 +74,10 @@ int main(int argc, char** argv) {
     cv::Mat resultsLayers[4];
     cv::Mat layers[4];
     ThreadData threadData[4]; // Store thread-specific data
-    while (true) {
+    std::chrono::time_point<std::chrono::high_resolution_clock> start, end;
+    while (count <= 100) {
 	count++;
-	printf("Processing frame %d\n", count);
+        //	printf("Processing frame %d\n", count);
         // Capture frame-by-frame
         videoFile >> frame;
 
@@ -114,9 +115,24 @@ int main(int argc, char** argv) {
         cv::imshow("Frame", stitchedFrame);
 
         // Press 'q' to break the loop
-        if (cv::waitKey(30) == 'q')
+        if (cv::waitKey(30) == 'q') {
             break;
+	}
+
+        // Start the timer after the first frame
+        if (count == 1) {
+            start = std::chrono::high_resolution_clock::now();
+        }
+
+        // Break the loop after the 200th frame
+        if (count == 100) {
+            end = std::chrono::high_resolution_clock::now();
+        }
     }
+
+     // Calculate elapsed time
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Time taken to process frames: " << elapsed.count() << " seconds." << std::endl;
 
     videoFile.release();
     return 0;
@@ -237,7 +253,7 @@ cv::Mat to442_sobel(cv::Mat& grayFrame) {
             uint8x8_t result = vqmovn_u16(vminq_u16(vreinterpretq_u16_s16(sum), vdupq_n_u16(255)));
 
             // Store the result back into the output frame
-            vst1_u8(&sobelFrame_i[j - 1], result)
+            vst1_u8(&sobelFrame_i[j - 1], result);
             }
     }
     return sobelFrame;
