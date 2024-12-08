@@ -8,8 +8,8 @@ CFLAGS = -Wall -O3 -lpthread -ffast-math -ftree-vectorize -mcpu=cortex-a53
 OPENCV_FLAGS = `pkg-config --cflags --libs opencv4`
 
 
-SRC = lab5.c
-TARGET = lab5.out
+SRC = lab6v2.c
+TARGET = lab6v2.out
 
 # Build the application
 
